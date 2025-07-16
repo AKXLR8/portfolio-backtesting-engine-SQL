@@ -1,41 +1,39 @@
 import pandas as pd
 import psycopg2
 
-# Load the CSV
-df = pd.read_csv("portfolio_daily_value.csv", parse_dates=['trade_date'])
-
-# Connect to PostgreSQL
-conn = psycopg2.connect(
+# Step 1: Connect to your local PostgreSQL (source of truth)
+local_conn = psycopg2.connect(
     host="localhost",
     dbname="portfolio_management",
     user="postgres",
     password="bablu365"
 )
-cur = conn.cursor()
+local_cursor = local_conn.cursor()
 
-# Insert data row by row
-for _, row in df.iterrows():
-    cur.execute("""
-        INSERT INTO portfolio_daily_value (portfolio_id, trade_date, portfolio_value)
-        VALUES (%s, %s, %s)
-    """, (row['portfolio_id'], row['trade_date'], row['portfolio_value']))
+# Step 2: Read portfolio metrics from local DB
+query = """
+SELECT
+    portfolio_id,
+    ROUND(AVG(daily_return) * 252::numeric, 2) AS annual_return,
+    ROUND(STDDEV(daily_return) * SQRT(252)::numeric, 2) AS annual_volatility,
+    ROUND((AVG(daily_return) * 252) / (STDDEV(daily_return) * SQRT(252))::numeric, 2) AS sharpe_ratio
+FROM daily_returns
+GROUP BY portfolio_id;
+"""
 
-conn.commit()
-cur.close()
-conn.close()
+df_metrics = pd.read_sql(query, local_conn)
 
-print("✅ portfolio_daily_value loaded into DB.")
+# Close local connection
+local_cursor.close()
+local_conn.close()
 
-
-
-
-# Connect to Neon DB
+# Step 3: Connect to Neon PostgreSQL
 neon_conn = psycopg2.connect(
     "postgresql://neondb_owner:npg_VfmpQuI3rWK1@ep-dark-forest-a16bt9bq-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 )
 neon_cur = neon_conn.cursor()
 
-# Upload metrics
+# Step 4: Upload to Neon
 for _, row in df_metrics.iterrows():
     neon_cur.execute("""
         INSERT INTO portfolio_metrics (portfolio_id, annual_return, annual_volatility, sharpe_ratio)
@@ -54,6 +52,5 @@ for _, row in df_metrics.iterrows():
 neon_conn.commit()
 neon_cur.close()
 neon_conn.close()
+
 print("✅ Portfolio metrics uploaded to Neon DB")
-
-
