@@ -3,7 +3,7 @@ import streamlit as st
 import pandas as pd
 import psycopg2
 
-conn = psycopg2.connect("postgresql://neondb_owner:npg_VfmpQuI3rWK1@ep-dark-forest-a16bt9bq-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require")
+conn = psycopg2.connect("postgrere")
 
 df = pd.read_sql("SELECT * FROM portfolio_metrics", conn)
 
